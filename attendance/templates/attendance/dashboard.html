@@ -1,0 +1,58 @@
+{% load static %}
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Mess Attendance</title>
+  <link rel="stylesheet" href="{% static 'attendance/dashboard.css' %}">
+</head>
+<body>
+  <main class="shell">
+    <header class="topbar">
+      <a class="brand" href="{% url 'attendance:dashboard' %}" aria-label="Mess attendance home"><span class="brand-mark">M</span><span>Mess<span class="brand-light">mate</span></span></a>
+      <a class="admin-link" href="{% url 'admin:index' %}">Admin</a>
+    </header>
+
+    <section class="intro">
+      <p class="eyebrow">YOUR DAILY CHECK-IN</p>
+      <h1>Mess attendance</h1>
+      <p class="subtitle">A simple check-in for every meal. Your choices stay saved by date.</p>
+      <form class="date-picker" method="get">
+        <label for="date">Viewing</label>
+        <input id="date" name="date" type="date" value="{{ selected_date|date:'Y-m-d' }}">
+        <button type="submit" class="date-button">Go to date <span aria-hidden="true">→</span></button>
+      </form>
+    </section>
+
+    {% if messages %}<div class="messages" aria-live="polite">{% for message in messages %}<p class="message {{ message.tags }}">{{ message }}</p>{% endfor %}</div>{% endif %}
+
+    <section class="summary" aria-label="Attendance summary">
+      <div class="summary-main"><div><p class="eyebrow">{{ selected_date|date:'l, F j'|upper }}</p><h2>{% if attendance_percent != None %}{{ attendance_percent }}%<span> attended</span>{% else %}Ready when you are<span> — mark your first meal</span>{% endif %}</h2></div><div class="meal-count"><strong>{{ eaten_count }}</strong><span>of 4 eaten</span></div></div>
+      <div class="progress-track" role="progressbar" aria-label="Meals eaten" aria-valuemin="0" aria-valuemax="4" aria-valuenow="{{ eaten_count }}"><span style="width: {{ progress_width }}%"></span></div>
+      <div class="summary-legend"><span><i class="dot eaten"></i>{{ eaten_count }} eaten</span><span><i class="dot skipped"></i>{{ skipped_count }} skipped</span><span><i class="dot unmarked"></i>{{ unmarked_count }} not marked</span></div>
+    </section>
+
+    <section class="meal-section">
+      <div class="section-heading"><div><p class="eyebrow">FOUR MOMENTS, ONE DAY</p><h2>Your meals</h2></div><span class="timezone">Times are up to you</span></div>
+      <div class="meal-list">
+        {% for meal in meals %}
+        <article class="meal-card {% if meal.status == 'EATEN' %}is-eaten{% elif meal.status == 'SKIPPED' %}is-skipped{% endif %}">
+          <div class="meal-icon icon-{{ meal.key|lower }}" aria-hidden="true">{% if meal.key == 'BREAKFAST' %}☀{% elif meal.key == 'LUNCH' %}◒{% elif meal.key == 'SNACKS' %}✦{% else %}☾{% endif %}</div>
+          <div class="meal-info"><h3>{{ meal.label }}</h3><p>{% if meal.status == 'EATEN' %}Marked as eaten{% elif meal.status == 'SKIPPED' %}Marked as skipped{% else %}Not marked yet{% endif %}</p></div>
+          <div class="status-pill {% if meal.status == 'EATEN' %}pill-eaten{% elif meal.status == 'SKIPPED' %}pill-skipped{% else %}pill-unmarked{% endif %}">{% if meal.status == 'EATEN' %}Eaten{% elif meal.status == 'SKIPPED' %}Skipped{% else %}Not Marked{% endif %}</div>
+          <form class="meal-actions" method="post" action="{% url 'attendance:update' %}">
+            {% csrf_token %}<input type="hidden" name="date" value="{{ selected_date|date:'Y-m-d' }}"><input type="hidden" name="meal" value="{{ meal.key }}">
+            <button class="choice eaten-choice {% if meal.status == 'EATEN' %}selected{% endif %}" name="status" value="EATEN" aria-label="Mark {{ meal.label }} eaten">✓ <span>Eaten</span></button>
+            <button class="choice skipped-choice {% if meal.status == 'SKIPPED' %}selected{% endif %}" name="status" value="SKIPPED" aria-label="Mark {{ meal.label }} skipped">— <span>Skipped</span></button>
+            {% if meal.status %}<button class="clear-choice" name="status" value="UNMARKED" aria-label="Clear {{ meal.label }} attendance" title="Set to not marked">Clear</button>{% endif %}
+          </form>
+        </article>
+        {% endfor %}
+      </div>
+    </section>
+    <footer><span>Not marked means no choice has been saved for this meal.</span><span>One check-in per meal, per day.</span></footer>
+  </main>
+</body>
+</html>
+
