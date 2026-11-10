@@ -8,7 +8,7 @@
   <link rel="stylesheet" href="{% static 'attendance/dashboard.css' %}">
 </head>
 <body>
-  <main class="food-shell">
+  <main class="shell">
     <header class="topbar">
       <a class="brand" href="{% url 'attendance:dashboard' %}" aria-label="Mess attendance home"><span class="brand-mark">M</span><span>Mess<span class="brand-light">mate</span></span></a>
       <a class="admin-link" href="{% url 'admin:index' %}">Admin</a>
@@ -17,63 +17,67 @@
     <a class="back-link" href="{% url 'attendance:dashboard' %}?date={{ return_date }}">← Back to attendance</a>
     {% if messages %}<div class="messages" aria-live="polite">{% for message in messages %}<p class="message {{ message.tags }}">{{ message }}</p>{% endfor %}</div>{% endif %}
 
-    <section class="food-header">
+    <section class="intro food-intro">
       <p class="eyebrow">{{ attendance.date|date:'l, F j'|upper }} · {{ attendance.get_status_display|upper }}</p>
-      <h1>{{ attendance.get_meal_display }} food details</h1>
-      <p>Add foods and their nutrition for the portion you ate.</p>
+      <h1>{{ attendance.get_meal_display }}</h1>
+      <p class="subtitle">Add the foods you ate and keep track of this meal’s nutrition.</p>
     </section>
 
-    <section class="food-total" aria-label="Meal macro totals">
-      <h2>Meal totals</h2>
+    {% if attendance.status == 'SKIPPED' %}
+    <p class="skipped-note">This meal was skipped at the mess. Add any food you ate elsewhere to include it in your daily macros.</p>
+    {% endif %}
+
+    <section class="macro-summary" aria-label="Meal nutrition totals">
+      <div class="macro-summary-heading"><h2>Meal nutrition</h2><span>{{ food_items|length }} food item{% if food_items|length != 1 %}s{% endif %}</span></div>
       <div class="macro-grid">
-        <div class="macro-stat"><strong>{{ food_totals.calories|floatformat:0 }}</strong><span>Calories (kcal)</span></div>
+        <div class="macro-stat calories"><strong>{{ food_totals.calories|floatformat:0 }}</strong><span>Calories (kcal)</span></div>
         <div class="macro-stat"><strong>{{ food_totals.protein_g|floatformat:1 }} g</strong><span>Protein</span></div>
         <div class="macro-stat"><strong>{{ food_totals.carbs_g|floatformat:1 }} g</strong><span>Carbs</span></div>
         <div class="macro-stat"><strong>{{ food_totals.fat_g|floatformat:1 }} g</strong><span>Fat</span></div>
       </div>
     </section>
 
-    {% if attendance.status == 'SKIPPED' %}
-    <p class="skipped-note">This meal was skipped at the mess. Add any food you ate elsewhere here to include it in your daily macros.</p>
-    {% endif %}
-    <section class="food-card">
-      <h2>Add a food</h2>
-      <p class="form-intro">Enter nutrition for the portion you ate. Use zero or leave a macro blank if you don’t know it.</p>
-      <form class="food-form" method="post">
-        {% csrf_token %}
-        {% for field in form %}
-        <div class="food-field {% if field.name == 'name' or field.name == 'serving' %}wide{% endif %}">
-          <label for="{{ field.id_for_label }}">{{ field.label }}</label>
-          {{ field }}
-          {% if field.help_text %}<span class="field-help">{{ field.help_text }}</span>{% endif %}
-          {% for error in field.errors %}<span class="field-error">{{ error }}</span>{% endfor %}
-        </div>
-        {% endfor %}
-        <button class="save-food" type="submit">Add food to {{ attendance.get_meal_display }}</button>
-      </form>
-    </section>
-    <section class="food-card">
-      <h2>Foods in this meal</h2>
-      {% if food_items %}
-      <div class="food-list">
-        {% for food in food_items %}
-        <article class="food-item">
-          <div class="food-item-main">
-            <h3>{{ food.name }}</h3>
-            <p>{% if food.serving %}{{ food.serving }} · {% endif %}{{ food.calories|floatformat:0 }} kcal</p>
-            <div class="food-macros">Protein {{ food.protein_g|floatformat:1 }} g · Carbs {{ food.carbs_g|floatformat:1 }} g · Fat {{ food.fat_g|floatformat:1 }} g</div>
+    <section class="food-layout">
+      <section class="food-card" aria-labelledby="add-food-title">
+        <div class="food-card-heading"><div><p class="eyebrow">NUTRITION ENTRY</p><h2 id="add-food-title">Add a food</h2></div><span class="food-step">01</span></div>
+        <p class="form-intro">Enter nutrition for the portion you ate. Leave unknown macros blank or enter zero.</p>
+        <form class="food-form" method="post">
+          {% csrf_token %}
+          {% for field in form %}
+          <div class="food-field {% if field.name == 'name' or field.name == 'serving' %}wide{% endif %}">
+            <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+            {{ field }}
+            {% if field.help_text %}<span class="field-help">{{ field.help_text }}</span>{% endif %}
+            {% for error in field.errors %}<span class="field-error">{{ error }}</span>{% endfor %}
           </div>
-          <form method="post" action="{% url 'attendance:delete_food' food.id %}" onsubmit="return confirm('Remove {{ food.name|escapejs }} from this meal?');">
-            {% csrf_token %}<button class="remove-food" type="submit">Remove</button>
-          </form>
-        </article>
-        {% endfor %}
-      </div>
-      {% else %}
-      <p class="empty-foods">No foods added yet. Add the items from this meal above.</p>
-      {% endif %}
+          {% endfor %}
+          <button class="save-food" type="submit">Add food to {{ attendance.get_meal_display }} <span aria-hidden="true">→</span></button>
+        </form>
+      </section>
+
+      <section class="food-card foods-card" aria-labelledby="foods-title">
+        <div class="food-card-heading"><div><p class="eyebrow">YOUR MEAL</p><h2 id="foods-title">Foods added</h2></div><span class="food-step">{{ food_items|length|stringformat:'02d' }}</span></div>
+        {% if food_items %}
+        <div class="food-list">
+          {% for food in food_items %}
+          <article class="food-item">
+            <div class="food-item-main">
+              <h3>{{ food.name }}</h3>
+              <p>{% if food.serving %}{{ food.serving }} · {% endif %}{{ food.calories|floatformat:0 }} kcal</p>
+              <div class="food-macros"><span>Protein <strong>{{ food.protein_g|floatformat:1 }} g</strong></span><span>Carbs <strong>{{ food.carbs_g|floatformat:1 }} g</strong></span><span>Fat <strong>{{ food.fat_g|floatformat:1 }} g</strong></span></div>
+            </div>
+            <form method="post" action="{% url 'attendance:delete_food' food.id %}" onsubmit="return confirm('Remove {{ food.name|escapejs }} from this meal?');">
+              {% csrf_token %}<button class="remove-food" type="submit">Remove</button>
+            </form>
+          </article>
+          {% endfor %}
+        </div>
+        {% else %}
+        <div class="empty-foods"><span class="empty-food-icon">＋</span><h3>No foods yet</h3><p>Add foods from this meal to see their macros here.</p></div>
+        {% endif %}
+      </section>
     </section>
-    <p class="food-page-footer">Enter nutrition values for the portion you ate. Daily totals include foods from all marked meals.</p>
+    <footer><span>Nutrition values are based on the portions you enter.</span><span>Daily macros include foods from all marked meals.</span></footer>
   </main>
 </body>
 </html>
