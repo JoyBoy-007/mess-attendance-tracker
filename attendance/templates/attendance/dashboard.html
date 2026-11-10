@@ -33,26 +33,41 @@
       <div class="summary-legend"><span><i class="dot eaten"></i>{{ eaten_count }} eaten</span><span><i class="dot skipped"></i>{{ skipped_count }} skipped</span><span><i class="dot unmarked"></i>{{ unmarked_count }} not marked</span></div>
     </section>
 
+    <section class="macro-summary" aria-label="Nutrition totals">
+      <div class="macro-summary-heading"><h2>Daily macros</h2><span>{{ food_count }} food item{% if food_count != 1 %}s{% endif %} from marked meals</span></div>
+      <div class="macro-grid">
+        <div class="macro-stat calories"><strong>{{ macro_totals.calories|floatformat:0 }}</strong><span>Calories (kcal)</span></div>
+        <div class="macro-stat"><strong>{{ macro_totals.protein_g|floatformat:1 }} g</strong><span>Protein</span></div>
+        <div class="macro-stat"><strong>{{ macro_totals.carbs_g|floatformat:1 }} g</strong><span>Carbs</span></div>
+        <div class="macro-stat"><strong>{{ macro_totals.fat_g|floatformat:1 }} g</strong><span>Fat</span></div>
+      </div>
+    </section>
+
     <section class="meal-section">
       <div class="section-heading"><div><p class="eyebrow">FOUR MOMENTS, ONE DAY</p><h2>Your meals</h2></div><span class="timezone">Times are up to you</span></div>
       <div class="meal-list">
         {% for meal in meals %}
         <article class="meal-card {% if meal.status == 'EATEN' %}is-eaten{% elif meal.status == 'SKIPPED' %}is-skipped{% endif %}">
           <div class="meal-icon icon-{{ meal.key|lower }}" aria-hidden="true">{% if meal.key == 'BREAKFAST' %}☀{% elif meal.key == 'LUNCH' %}◒{% elif meal.key == 'SNACKS' %}✦{% else %}☾{% endif %}</div>
-          <div class="meal-info"><h3>{{ meal.label }}</h3><p>{% if meal.status == 'EATEN' %}Marked as eaten{% elif meal.status == 'SKIPPED' %}Marked as skipped{% else %}Not marked yet{% endif %}</p></div>
+          <div class="meal-info">
+            <h3>{{ meal.label }}</h3>
+            <p>{% if meal.status == 'EATEN' %}Marked as eaten{% elif meal.status == 'SKIPPED' %}Marked as skipped{% else %}Not marked yet{% endif %}</p>
+            {% if meal.status %}
+              <a class="food-action" href="{% url 'attendance:meal_foods' meal.attendance_id %}">{% if meal.food_count %}{{ meal.food_count }} food item{% if meal.food_count != 1 %}s{% endif %} · {{ meal.food_totals.calories|floatformat:0 }} kcal · Manage{% else %}+ Add food details{% endif %}</a>
+            {% endif %}
+          </div>
           <div class="status-pill {% if meal.status == 'EATEN' %}pill-eaten{% elif meal.status == 'SKIPPED' %}pill-skipped{% else %}pill-unmarked{% endif %}">{% if meal.status == 'EATEN' %}Eaten{% elif meal.status == 'SKIPPED' %}Skipped{% else %}Not Marked{% endif %}</div>
           <form class="meal-actions" method="post" action="{% url 'attendance:update' %}">
             {% csrf_token %}<input type="hidden" name="date" value="{{ selected_date|date:'Y-m-d' }}"><input type="hidden" name="meal" value="{{ meal.key }}">
             <button class="choice eaten-choice {% if meal.status == 'EATEN' %}selected{% endif %}" name="status" value="EATEN" aria-label="Mark {{ meal.label }} eaten">✓ <span>Eaten</span></button>
             <button class="choice skipped-choice {% if meal.status == 'SKIPPED' %}selected{% endif %}" name="status" value="SKIPPED" aria-label="Mark {{ meal.label }} skipped">— <span>Skipped</span></button>
-            {% if meal.status %}<button class="clear-choice" name="status" value="UNMARKED" aria-label="Clear {{ meal.label }} attendance" title="Set to not marked">Clear</button>{% endif %}
+            {% if meal.status %}<button class="clear-choice" name="status" value="UNMARKED" aria-label="Clear {{ meal.label }} attendance" title="Set to not marked" {% if meal.saved_food_count %}onclick="return confirm('Clearing this meal also deletes its saved food details. Continue?');"{% endif %}>Clear</button>{% endif %}
           </form>
         </article>
         {% endfor %}
       </div>
     </section>
-    <footer><span>Not marked means no choice has been saved for this meal.</span><span>One check-in per meal, per day.</span></footer>
+    <footer><span>Not marked means no choice has been saved for this meal.</span><span>Daily macros sum foods entered for marked meals.</span></footer>
   </main>
 </body>
 </html>
-

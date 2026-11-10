@@ -6,10 +6,12 @@ A small Django app for recording whether you ate each meal in your mess. Built w
 
 - Track Breakfast, Lunch, Snacks, and Dinner for any date.
 - Mark each meal Eaten or Skipped; unmarked meals remain Not Marked.
-- Change or clear a meal's status later.
+- Add foods and portion details to eaten meals.
+- Record calories, protein, carbohydrates, and fat for each portion.
+- See daily macro totals and per-meal food details. A skipped mess meal can still record foods eaten elsewhere.
+- Change or clear a meal's status later; remove food entries when needed.
 - Enforce one attendance record per meal per date in the database.
-- Review daily counts and attendance percentage from the dashboard.
-- Manage records through Django admin.
+- Manage attendance and foods through Django admin.
 
 ## Quick start
 
