@@ -1,4 +1,5 @@
 {% load static %}
+
 <!doctype html>
 <html lang="en">
 <head>
@@ -6,12 +7,38 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{{ attendance.get_meal_display }} food details · MessMate</title>
   <link rel="stylesheet" href="{% static 'attendance/dashboard.css' %}">
+  <link rel="stylesheet" href="{% static 'attendance/weekly_menu.css' %}">
 </head>
 <body>
   <main class="shell">
     <header class="topbar">
-      <a class="brand" href="{% url 'attendance:dashboard' %}" aria-label="Mess attendance home"><span class="brand-mark">M</span><span>Mess<span class="brand-light">mate</span></span></a>
-      <a class="admin-link" href="{% url 'admin:index' %}">Admin</a>
+      <a class="brand" href="{% url 'attendance:dashboard' %}" aria-label="Mess attendance home">
+        <span class="brand-mark">M</span><span>Mess<span class="brand-light">mate</span></span>
+      </a>
+      <div class="user-nav">
+        {% if user.is_authenticated %}
+          <span class="user-greeting">
+            <span class="user-avatar">{{ user.username|make_list|first|upper }}</span>
+            <span class="user-name">{{ user.username }}</span>
+          </span>
+          {% if user.is_staff %}
+            <a class="admin-link" href="{% url 'admin:index' %}">Admin</a>
+          {% endif %}
+          <form method="post" action="{% url 'attendance:logout' %}" style="margin:0;">
+            {% csrf_token %}
+            <button type="submit" class="auth-logout-btn">Log out</button>
+          </form>
+        {% else %}
+          <div class="guest-indicator-pill" title="You are in Guest Mode. Data is saved in this browser.">
+            <span class="guest-dot"></span> Guest Mode
+          </div>
+          <a class="auth-btn auth-btn-save" href="{% url 'attendance:signup' %}" title="Create an account to save your tracked meals permanently">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="margin-right:3px;vertical-align:-1px;"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>
+            Save Data
+          </a>
+          <a class="auth-link" href="{% url 'attendance:login' %}">Log in</a>
+        {% endif %}
+      </div>
     </header>
 
     <a class="back-link" href="{% url 'attendance:dashboard' %}?date={{ return_date }}">← Back to attendance</a>
@@ -37,11 +64,74 @@
       </div>
     </section>
 
+    {% if planned_foods %}
+    <section class="planned-foods-note" aria-label="Planned menu foods">
+      <div><p class="eyebrow">FROM THIS WEEK’S MENU</p><p>Choose a dish to add it to your food log. Add portion and nutrition values below.</p></div>
+      <div class="planned-food-chips">{% for dish in planned_foods %}<a class="planned-food-chip" href="?name={{ dish|urlencode }}">{{ dish }} <span aria-hidden="true">+</span></a>{% endfor %}</div>
+    </section>
+    {% endif %}
+
+    <!-- Meal Photo Upload Section (Matching website's menu upload system) -->
+    <section class="menu-upload-card meal-photo-card" id="photo-upload" aria-labelledby="photo-scan-title">
+      <div class="menu-upload-copy">
+        <span class="menu-upload-icon" aria-hidden="true">📸</span>
+        <div>
+          <h2 id="photo-scan-title">Fill from a meal photo</h2>
+          <p>Take or upload a photo of your meal plate or tray (JPG, PNG, WebP up to 10 MB). Gemini AI Vision will detect the dishes, estimate portions, and log calories &amp; macros automatically.</p>
+        </div>
+      </div>
+
+      <div class="menu-upload-form" style="margin-top: 14px;">
+        <input type="file" id="photo-file-input" accept="image/jpeg,image/png,image/webp" capture="environment" hidden>
+        
+        <label class="photo-cta-btn" id="photo-file-label" for="photo-file-input">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path>
+            <circle cx="12" cy="13" r="4"></circle>
+          </svg>
+          <span id="photo-label-text">Choose or take photo</span>
+        </label>
+        
+        <span class="photo-file-name" id="photo-file-name">No photo selected</span>
+
+        <button class="photo-analyze-btn" id="photo-analyze-btn" type="button" data-analyze-url="{% url 'attendance:analyze_photo' %}" style="display:none;">
+          Analyze plate with AI <span aria-hidden="true">→</span>
+        </button>
+      </div>
+
+      <!-- Selected Photo Preview Strip -->
+      <div class="photo-preview-box" id="photo-preview-box" hidden style="display:none;">
+        <img id="photo-preview-img" alt="Meal preview">
+        <div class="photo-preview-info">
+          <strong class="photo-preview-title" id="photo-preview-title"></strong>
+          <span class="photo-preview-sub">Ready for Gemini AI nutrition extraction</span>
+        </div>
+        <button class="photo-discard-single" id="photo-retake-btn" type="button">Remove photo ✕</button>
+      </div>
+
+      <!-- Analysis Results -->
+      <div class="photo-analysis-results" id="photo-analysis-results" hidden style="display:none;">
+        <div class="section-heading" style="margin-bottom:8px;align-items:center;">
+          <div>
+            <p class="eyebrow" style="margin-bottom:3px;">DETECTED DISHES</p>
+            <h2 style="margin:0;font:700 16px Manrope,sans-serif;">Plate nutrition summary</h2>
+          </div>
+          <button class="photo-add-all-btn" id="photo-add-all-btn" type="button" data-bulk-url="{% url 'attendance:add_bulk_foods' attendance.id %}">
+            Add all to {{ attendance.get_meal_display }} <span aria-hidden="true">✓</span>
+          </button>
+        </div>
+        <p id="photo-results-summary" style="margin:0 0 12px;color:var(--muted);font-size:11px;"></p>
+        <div class="food-list" id="photo-detected-list"></div>
+      </div>
+
+      <p class="menu-review-note" style="margin-top:12px;">Portions and macros are estimated by AI. You can review detected items and edit them before or after adding.</p>
+    </section>
+
     <section class="food-layout">
       <section class="food-card" aria-labelledby="add-food-title">
         <div class="food-card-heading"><div><p class="eyebrow">NUTRITION ENTRY</p><h2 id="add-food-title">Add a food</h2></div><span class="food-step">01</span></div>
-        <p class="form-intro">Enter nutrition for the portion you ate. Leave unknown macros blank or enter zero.</p>
-        <form class="food-form" method="post">
+        <p class="form-intro">Enter the food and portion. Macros calculate automatically when you add the food, powered by Gemini AI.</p>
+        <form class="food-form" id="food-entry" method="post" data-lookup-url="/nutrition/lookup/">
           {% csrf_token %}
           {% for field in form %}
           <div class="food-field {% if field.name == 'name' or field.name == 'serving' %}wide{% endif %}">
@@ -51,6 +141,8 @@
             {% for error in field.errors %}<span class="field-error">{{ error }}</span>{% endfor %}
           </div>
           {% endfor %}
+          <button class="calculate-food" id="calculate-macros" type="button">Calculate macros <span aria-hidden="true">↻</span></button>
+          <p class="macro-lookup-status" id="macro-lookup-status" role="status" aria-live="polite">Macros calculate automatically when you add the food, or click Calculate macros to review first.</p>
           <button class="save-food" type="submit">Add food to {{ attendance.get_meal_display }} <span aria-hidden="true">→</span></button>
         </form>
       </section>
@@ -79,5 +171,374 @@
     </section>
     <footer><span>Nutrition values are based on the portions you enter.</span><span>Daily macros include foods from all marked meals.</span></footer>
   </main>
+  <script>
+    (() => {
+      const form = document.getElementById("food-entry");
+      if (!form) return;
+      const food = document.getElementById("id_name");
+      const serving = document.getElementById("id_serving");
+      const status = document.getElementById("macro-lookup-status");
+      const calcButton = document.getElementById("calculate-macros");
+      const saveButton = form.querySelector(".save-food");
+      const originalSaveHtml = saveButton ? saveButton.innerHTML : "";
+      const macroIds = {calories: "id_calories", protein_g: "id_protein_g", carbs_g: "id_carbs_g", fat_g: "id_fat_g"};
+
+      let lastCalculatedSig = "";
+      let userEditedMacros = false;
+      let isCalculating = false;
+
+      // Track if user manually edits any of the macro fields
+      Object.values(macroIds).forEach(id => {
+        const el = document.getElementById(id);
+        if (el) {
+          el.addEventListener("input", () => {
+            userEditedMacros = true;
+          });
+        }
+      });
+
+      function currentSignature() {
+        return (food.value.trim() + "::" + serving.value.trim()).toLowerCase();
+      }
+
+      function hasCalculatedMacros() {
+        const cal = document.getElementById(macroIds.calories);
+        return cal && parseFloat(cal.value) > 0 && currentSignature() === lastCalculatedSig;
+      }
+
+      async function calculate(showLoading = true) {
+        const foodName = food.value.trim();
+        if (!foodName) return false;
+        if (isCalculating) return false;
+
+        isCalculating = true;
+        if (showLoading) status.textContent = "Calculating nutrition with Gemini AI…";
+        if (calcButton) calcButton.disabled = true;
+
+        const params = new URLSearchParams({food: foodName, portion: serving.value.trim()});
+        try {
+          const response = await fetch(`${form.dataset.lookupUrl}?${params}`, {headers: {Accept: "application/json"}});
+          const data = await response.json();
+          if (!response.ok) throw new Error(data.error || "No nutrition match found.");
+
+          for (const [key, id] of Object.entries(macroIds)) {
+            const input = document.getElementById(id);
+            if (input) input.value = data.macros[key];
+          }
+          if (!serving.value.trim() && data.default_serving) {
+            serving.value = data.default_serving;
+          }
+          lastCalculatedSig = currentSignature();
+          userEditedMacros = false;
+
+          status.textContent = `Calculated ${data.food} for ${data.portion || data.serving}. Source: ${data.source}.`;
+          status.classList.remove("lookup-error");
+          return true;
+        } catch (error) {
+          status.textContent = error.message;
+          status.classList.add("lookup-error");
+          return false;
+        } finally {
+          isCalculating = false;
+          if (calcButton) calcButton.disabled = false;
+        }
+      }
+
+      // Handle "Calculate macros" manual button click
+      if (calcButton) {
+        calcButton.addEventListener("click", () => calculate(true));
+      }
+
+      // Handle Form Submit: automatically calculate macros when clicking "Add food" if not done yet
+      form.addEventListener("submit", async (e) => {
+        if (!food.value.trim()) return;
+        if (userEditedMacros || hasCalculatedMacros()) {
+          return; // Already calculated or user provided custom macros
+        }
+
+        e.preventDefault();
+        if (saveButton) {
+          saveButton.disabled = true;
+          saveButton.textContent = "Calculating macros & adding…";
+        }
+
+        await calculate(true);
+
+        if (saveButton) {
+          saveButton.innerHTML = originalSaveHtml;
+          saveButton.disabled = false;
+        }
+
+        form.submit();
+      });
+
+      // Quick planned food chips: fill name and auto-calculate
+      document.querySelectorAll(".planned-food-chip").forEach(chip => {
+        chip.addEventListener("click", (e) => {
+          e.preventDefault();
+          const dishName = chip.textContent.replace("+", "").trim();
+          food.value = dishName;
+          userEditedMacros = false;
+          calculate(true);
+        });
+      });
+
+      // Auto-calculate on initial load if prefilled (e.g. from ?name= query)
+      if (food.value.trim() && !hasCalculatedMacros()) {
+        calculate(false);
+      }
+
+      // ==========================================
+      // Photo Scanner Logic (Gemini AI Vision)
+      // ==========================================
+      const photoFileInput = document.getElementById("photo-file-input");
+      const photoFileLabel = document.getElementById("photo-file-label");
+      const photoLabelText = document.getElementById("photo-label-text");
+      const photoFileName = document.getElementById("photo-file-name");
+      const photoPreviewBox = document.getElementById("photo-preview-box");
+      const photoPreviewImg = document.getElementById("photo-preview-img");
+      const photoPreviewTitle = document.getElementById("photo-preview-title");
+      const photoAnalyzeBtn = document.getElementById("photo-analyze-btn");
+      const photoRetakeBtn = document.getElementById("photo-retake-btn");
+      const photoResults = document.getElementById("photo-analysis-results");
+      const photoSummary = document.getElementById("photo-results-summary");
+      const photoList = document.getElementById("photo-detected-list");
+      const photoAddAllBtn = document.getElementById("photo-add-all-btn");
+
+      let detectedFoods = [];
+      let selectedPhotoFile = null;
+
+      function getCsrfToken() {
+        const input = document.querySelector("[name=csrfmiddlewaretoken]");
+        return input ? input.value : "";
+      }
+
+      if (photoFileInput) {
+        photoFileInput.addEventListener("change", () => {
+          const file = photoFileInput.files[0];
+          if (!file) return;
+
+          if (file.size > 10 * 1024 * 1024) {
+            alert("Please choose an image smaller than 10 MB.");
+            photoFileInput.value = "";
+            return;
+          }
+
+          selectedPhotoFile = file;
+          const reader = new FileReader();
+          reader.onload = (e) => {
+            photoPreviewImg.src = e.target.result;
+            if (photoPreviewTitle) {
+              photoPreviewTitle.textContent = `${file.name} (${Math.round(file.size / 1024)} KB)`;
+            }
+            if (photoFileName) {
+              photoFileName.textContent = file.name;
+            }
+            if (photoLabelText) {
+              photoLabelText.textContent = "Change photo";
+            }
+            photoPreviewBox.style.display = "flex";
+            photoPreviewBox.hidden = false;
+            photoAnalyzeBtn.style.display = "inline-flex";
+            photoAnalyzeBtn.disabled = false;
+            photoResults.style.display = "none";
+            photoResults.hidden = true;
+            detectedFoods = [];
+          };
+          reader.readAsDataURL(file);
+        });
+      }
+
+      if (photoRetakeBtn) {
+        photoRetakeBtn.addEventListener("click", () => {
+          photoFileInput.value = "";
+          selectedPhotoFile = null;
+          photoPreviewBox.style.display = "none";
+          photoPreviewBox.hidden = true;
+          photoAnalyzeBtn.style.display = "none";
+          photoResults.style.display = "none";
+          photoResults.hidden = true;
+          if (photoFileName) photoFileName.textContent = "No photo selected";
+          if (photoLabelText) photoLabelText.textContent = "Choose or take photo";
+          detectedFoods = [];
+        });
+      }
+
+      function renderDetectedFoods() {
+        photoList.innerHTML = "";
+
+        if (detectedFoods.length === 0) {
+          photoList.innerHTML = "<div class='empty-foods'><span class='empty-food-icon'>🍽</span><h3>No dishes in list</h3><p>Upload or take another photo to detect your meal.</p></div>";
+          photoAddAllBtn.style.display = "none";
+          photoSummary.textContent = "No dishes remaining in list.";
+          return;
+        }
+
+        const totalCals = detectedFoods.reduce((acc, f) => acc + (parseFloat(f.calories) || 0), 0);
+        const totalProtein = detectedFoods.reduce((acc, f) => acc + (parseFloat(f.protein_g) || 0), 0);
+        photoSummary.textContent = `${detectedFoods.length} dish${detectedFoods.length === 1 ? '' : 'es'} detected · Total: ~${Math.round(totalCals)} kcal (${totalProtein.toFixed(1)}g protein)`;
+
+        photoAddAllBtn.style.display = "inline-flex";
+        photoAddAllBtn.innerHTML = `Add all ${detectedFoods.length} foods to {{ attendance.get_meal_display }} <span aria-hidden="true">✓</span>`;
+
+        detectedFoods.forEach((item, index) => {
+          const itemDiv = document.createElement("article");
+          itemDiv.className = "food-item";
+          itemDiv.innerHTML = `
+            <div class="food-item-main">
+              <div style="display:flex;align-items:center;gap:7px;margin-bottom:3px;">
+                <h3 style="margin:0;">${item.name}</h3>
+                <span class="photo-detected-tag">Detected</span>
+              </div>
+              <p style="margin:0 0 6px;color:var(--muted);font-size:10px;">${item.serving || "1 serving"} · ${Math.round(item.calories || 0)} kcal</p>
+              <div class="food-macros">
+                <span>Protein <strong>${Number(item.protein_g || 0).toFixed(1)} g</strong></span>
+                <span>Carbs <strong>${Number(item.carbs_g || 0).toFixed(1)} g</strong></span>
+                <span>Fat <strong>${Number(item.fat_g || 0).toFixed(1)} g</strong></span>
+              </div>
+            </div>
+            <div class="photo-item-actions">
+              <button class="photo-add-single" type="button" data-index="${index}" title="Add only this item to meal">+ Add</button>
+              <button class="choice photo-fill-single" type="button" data-index="${index}" title="Load into manual entry form below to adjust">Edit ✎</button>
+              <button class="photo-discard-single" type="button" data-index="${index}" title="Remove from list" aria-label="Remove ${item.name}">✕</button>
+            </div>
+          `;
+          photoList.appendChild(itemDiv);
+        });
+
+        // 1. Add single item directly
+        photoList.querySelectorAll(".photo-add-single").forEach(btn => {
+          btn.addEventListener("click", async () => {
+            const idx = parseInt(btn.dataset.index, 10);
+            const item = detectedFoods[idx];
+            if (!item) return;
+
+            btn.disabled = true;
+            btn.textContent = "Adding…";
+
+            try {
+              const response = await fetch(photoAddAllBtn.dataset.bulkUrl, {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  "X-CSRFToken": getCsrfToken(),
+                },
+                body: JSON.stringify({ foods: [item] }),
+              });
+              const data = await response.json();
+              if (!response.ok || !data.ok) {
+                throw new Error(data.error || "Failed to add food.");
+              }
+              window.location.reload();
+            } catch (err) {
+              alert(err.message || "Error adding food.");
+              btn.disabled = false;
+              btn.textContent = "+ Add";
+            }
+          });
+        });
+
+        // 2. Load into manual form
+        photoList.querySelectorAll(".photo-fill-single").forEach(btn => {
+          btn.addEventListener("click", () => {
+            const idx = parseInt(btn.dataset.index, 10);
+            const f = detectedFoods[idx];
+            if (f) {
+              food.value = f.name;
+              serving.value = f.serving || "";
+              document.getElementById(macroIds.calories).value = f.calories;
+              document.getElementById(macroIds.protein_g).value = f.protein_g;
+              document.getElementById(macroIds.carbs_g).value = f.carbs_g;
+              document.getElementById(macroIds.fat_g).value = f.fat_g;
+              userEditedMacros = true;
+              status.textContent = `Loaded ${f.name} into form. You can adjust values and click Add food below.`;
+              status.classList.remove("lookup-error");
+              form.scrollIntoView({ behavior: "smooth" });
+            }
+          });
+        });
+
+        // 3. Discard single dish
+        photoList.querySelectorAll(".photo-discard-single").forEach(btn => {
+          btn.addEventListener("click", () => {
+            const idx = parseInt(btn.dataset.index, 10);
+            detectedFoods.splice(idx, 1);
+            renderDetectedFoods();
+          });
+        });
+      }
+
+      if (photoAnalyzeBtn) {
+        photoAnalyzeBtn.addEventListener("click", async () => {
+          if (!selectedPhotoFile) return;
+
+          photoAnalyzeBtn.disabled = true;
+          photoAnalyzeBtn.innerHTML = "Analyzing plate with AI… <span aria-hidden='true'>⏳</span>";
+          photoResults.style.display = "none";
+          photoResults.hidden = true;
+
+          const formData = new FormData();
+          formData.append("photo", selectedPhotoFile);
+
+          try {
+            const response = await fetch(photoAnalyzeBtn.dataset.analyzeUrl, {
+              method: "POST",
+              headers: {
+                "X-CSRFToken": getCsrfToken(),
+              },
+              body: formData,
+            });
+
+            const data = await response.json();
+            if (!response.ok || !data.ok) {
+              throw new Error(data.error || "Could not analyze the photo.");
+            }
+
+            detectedFoods = data.foods || [];
+            renderDetectedFoods();
+
+            photoResults.style.display = "block";
+            photoResults.hidden = false;
+          } catch (err) {
+            alert(err.message || "Failed to analyze photo.");
+          } finally {
+            photoAnalyzeBtn.disabled = false;
+            photoAnalyzeBtn.innerHTML = "Analyze plate with AI <span aria-hidden='true'>→</span>";
+          }
+        });
+      }
+
+      if (photoAddAllBtn) {
+        photoAddAllBtn.addEventListener("click", async () => {
+          if (!detectedFoods.length) return;
+
+          photoAddAllBtn.disabled = true;
+          photoAddAllBtn.textContent = "Adding foods to meal… ⏳";
+
+          try {
+            const response = await fetch(photoAddAllBtn.dataset.bulkUrl, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                "X-CSRFToken": getCsrfToken(),
+              },
+              body: JSON.stringify({ foods: detectedFoods }),
+            });
+
+            const data = await response.json();
+            if (!response.ok || !data.ok) {
+              throw new Error(data.error || "Failed to add foods.");
+            }
+
+            window.location.reload();
+          } catch (err) {
+            alert(err.message || "Error adding foods.");
+            photoAddAllBtn.disabled = false;
+            photoAddAllBtn.innerHTML = `Add all ${detectedFoods.length} foods <span aria-hidden="true">✓</span>`;
+          }
+        });
+      }
+    })();
+  </script>
 </body>
 </html>

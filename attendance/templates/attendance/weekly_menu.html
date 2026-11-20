@@ -1,0 +1,91 @@
+{% load static %}
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Weekly menu · MessMate</title>
+  <link rel="stylesheet" href="{% static 'attendance/dashboard.css' %}">
+  <link rel="stylesheet" href="{% static 'attendance/weekly_menu.css' %}">
+</head>
+<body>
+  <main class="shell menu-shell">
+    <header class="topbar">
+      <a class="brand" href="{% url 'attendance:dashboard' %}" aria-label="Mess attendance home">
+        <span class="brand-mark">M</span><span>Mess<span class="brand-light">mate</span></span>
+      </a>
+      <div class="user-nav">
+        {% if user.is_authenticated %}
+          <span class="user-greeting">
+            <span class="user-avatar">{{ user.username|make_list|first|upper }}</span>
+            <span class="user-name">{{ user.username }}</span>
+          </span>
+          {% if user.is_staff %}
+            <a class="admin-link" href="{% url 'admin:index' %}">Admin</a>
+          {% endif %}
+          <form method="post" action="{% url 'attendance:logout' %}" style="margin:0;">
+            {% csrf_token %}
+            <button type="submit" class="auth-logout-btn">Log out</button>
+          </form>
+        {% else %}
+          <div class="guest-indicator-pill" title="You are in Guest Mode. Data is saved in this browser.">
+            <span class="guest-dot"></span> Guest Mode
+          </div>
+          <a class="auth-btn auth-btn-save" href="{% url 'attendance:signup' %}" title="Create an account to save your tracked meals permanently">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="margin-right:3px;vertical-align:-1px;"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>
+            Save Data
+          </a>
+          <a class="auth-link" href="{% url 'attendance:login' %}">Log in</a>
+        {% endif %}
+      </div>
+    </header>
+    <a class="back-link" href="{% url 'attendance:dashboard' %}?date={{ week_start|date:'Y-m-d' }}">← Back to attendance</a>
+    {% if messages %}<div class="messages" aria-live="polite">{% for message in messages %}<p class="message {{ message.tags }}">{{ message }}</p>{% endfor %}</div>{% endif %}
+
+    <section class="intro food-intro">
+      <p class="eyebrow">YOUR MESS SCHEDULE</p>
+      <h1>Weekly menu</h1>
+      <p class="subtitle">Upload a photo to fill the week’s meals, then review and edit the dishes.</p>
+      <form class="date-picker week-picker" method="get">
+        <label for="week">Week of</label>
+        <input id="week" name="week" type="date" value="{{ week_start|date:'Y-m-d' }}">
+        <button type="submit" class="date-button">Open week <span aria-hidden="true">→</span></button>
+      </form>
+    </section>
+
+    <section class="menu-upload-card">
+      <div class="menu-upload-copy"><span class="menu-upload-icon" aria-hidden="true">↑</span><div><h2>Fill from a menu photo</h2><p>Use a clear photo or scan of your weekly menu (JPG, PNG, or WebP, up to 10 MB).</p></div></div>
+      {% if not has_openai_key %}<p class="api-note">Photo analysis needs an OpenAI API key in <code>OPENAI_API_KEY</code>. You can still enter and edit the menu below.</p>{% endif %}
+      <form class="menu-upload-form" method="post" enctype="multipart/form-data">
+        {% csrf_token %}<input type="hidden" name="week_start" value="{{ week_start|date:'Y-m-d' }}"><input type="hidden" name="action" value="analyze">
+        <label class="menu-file-label" for="id_photo">{% if menu.photo %}Choose another photo{% else %}Choose menu photo{% endif %}</label>
+        {{ photo_form.photo }}
+        {% for error in photo_form.photo.errors %}<span class="field-error">{{ error }}</span>{% endfor %}
+        {% if menu.photo %}<a class="menu-photo-link" href="{{ menu.photo.url }}" target="_blank" rel="noopener">View uploaded menu</a>{% endif %}
+        <button class="save-food analyze-button" type="submit">Analyze and fill meals <span aria-hidden="true">→</span></button>
+      </form>
+      <p class="menu-review-note">Dish names are extracted; nutrition values aren’t inferred from the menu. Check the results for accuracy.</p>
+    </section>
+
+    <form class="menu-editor" method="post">
+      {% csrf_token %}<input type="hidden" name="week_start" value="{{ week_start|date:'Y-m-d' }}"><input type="hidden" name="action" value="save">
+      <div class="section-heading menu-editor-heading"><div><p class="eyebrow">{{ week_start|date:'M j' }} – {{ week_end|date:'M j, Y' }}</p><h2>Edit meals</h2></div><button class="save-food" type="submit">Save weekly menu <span aria-hidden="true">✓</span></button></div>
+      <p class="menu-editor-help">Edit any dish names below. Separate multiple dishes with commas.</p>
+      <div class="menu-day-list">
+        {% for day in menu_days %}
+        <section class="menu-day-card">
+          <h3>{{ day.label }}</h3>
+          <div class="menu-day-meals">
+            {% for meal in day.meals %}
+            <label class="menu-entry"><span>{{ meal.label }}</span><input type="text" name="entry-{{ day.index }}-{{ meal.key }}" value="{{ meal.dishes }}" maxlength="600" placeholder="Not listed"></label>
+            {% endfor %}
+          </div>
+        </section>
+        {% endfor %}
+      </div>
+      <button class="save-food menu-save-bottom" type="submit">Save weekly menu <span aria-hidden="true">✓</span></button>
+    </form>
+    <footer><span>This menu repeats for the selected week only.</span><span>Always review photo analysis before saving.</span></footer>
+  </main>
+</body>
+</html>
